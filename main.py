@@ -14,11 +14,29 @@ class SentientComponent:
     def __init__(self, position, eulers, health):
         self.position = np.array(position, dtype=np.float32)
         self.eulers = np.array(eulers, dtype=np.float32)
-        self.velocity = np.array([1, 0, 2], dtype=np.float32)
+        self.velocity = np.array([0, 0, 0], dtype=np.float32)
         self.state = 'stable'
         self.can_shoot = True
-        self.reloading = False
         self.reload_time = 0
+
+    def shoot(self):
+        if self.can_shoot:
+            print('shoot')
+            self.can_shoot = False
+            self.reload_time = 5
+
+    def update(self):
+        if abs(self.velocity[1]) < 0.01:
+            self.eulers[0] *= 0.9
+            if abs(self.eulers[0] < 0.5):
+                self.eulers[0] = 0
+        else:
+            self.position += self.velocity / 4
+            self.eulers[0] += 8 * self.velocity[1]
+            self.velocity = np.array([0, 0, 0], dtype=np.float32)
+
+            self.position[1] = min(6, max(-6, self.position[1]))
+            self.eulers[0] = min(45, max(-45, self.eulers[0]))
 
 
 class Scene:
@@ -38,10 +56,10 @@ class Scene:
         self.power_ups = []
 
     def update(self, rate):
-        pass
+        self.player.update()
 
     def move_player(self, d_pos):
-        pass
+        self.player.velocity += d_pos
 
 
 class App:
@@ -81,6 +99,15 @@ class App:
 
     def handle_keys(self):
         keys = pg.key.get_pressed()
+        rate = self.frame_time / 16
+
+        if keys[pg.K_LEFT]:
+            self.scene.move_player(rate * np.array([0, 1, 0], dtype=np.float32))
+        elif keys[pg.K_RIGHT]:
+            self.scene.move_player(rate * np.array([0, -1, 0], dtype=np.float32))
+
+        if keys[pg.K_SPACE]:
+            self.scene.player.shoot()
 
     def calculate_frame_rate(self):
         self.current_time = pg.time.get_ticks()
@@ -175,7 +202,7 @@ class RenderPass:
         glUseProgram(self.shader)
 
         view_transform = pyrr.matrix44.create_look_at(
-            eye=np.array([-8, 0, 4], dtype=np.float32),
+            eye=np.array([-10, 0, 4], dtype=np.float32),
             target=np.array([1, 0, 4], dtype=np.float32),
             up=np.array([0, 0, 1], dtype=np.float32),
             dtype=np.float32
@@ -218,6 +245,10 @@ class RenderPass:
         model_transform = pyrr.matrix44.multiply(
             m1=model_transform,
             m2=pyrr.matrix44.create_from_z_rotation(theta=np.radians(-90), dtype=np.float32)
+        )
+        model_transform = pyrr.matrix44.multiply(
+            m1=model_transform,
+            m2=pyrr.matrix44.create_from_x_rotation(theta=np.radians(scene.player.eulers[0]), dtype=np.float32)
         )
         model_transform = pyrr.matrix44.multiply(
             m1=model_transform,
