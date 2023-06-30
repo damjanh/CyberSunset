@@ -23,6 +23,7 @@ class SentientComponent:
         self.can_shoot = True
         self.reload_time = 20
         self.falling_time = 0
+        self.health = health
 
     def update(self, rate):
         if self.state == 'stable':
@@ -33,7 +34,6 @@ class SentientComponent:
             else:
                 self.position += self.velocity / 4
                 self.eulers[0] += 8 * self.velocity[1]
-                self.velocity = np.array([0, 0, 0], dtype=np.float32)
 
                 self.position[1] = min(6, max(-6, self.position[1]))
                 self.eulers[0] = min(45, max(-45, self.eulers[0]))
@@ -54,9 +54,9 @@ class SentientComponent:
 
 class Scene:
     def __init__(self):
-        self.enemy_spawn_rate = 0
-        self.power_ups_spawn_rate = 0
-        self.enemy_shoot_rate = 0
+        self.enemy_spawn_rate = 0.02
+        self.power_ups_spawn_rate = 0.01
+        self.enemy_shoot_rate = 0.02
 
         self.player = SentientComponent(
             position=[1, 0, 1],
@@ -65,16 +65,39 @@ class Scene:
         )
 
         self.enemies = []
+
+        self.x_min = 18
+        self.x_max = 36
+        self.y_min = -6
+        self.y_max = 6
+
         self.bullets = []
         self.power_ups = []
 
     def update(self, rate):
         self.player.update(rate)
+        self.player.velocity = np.array([0, 0, 0], dtype=np.float32)
+
+        if np.random.uniform() < self.enemy_spawn_rate * rate and len(self.enemies) < 6:
+            enemy = SentientComponent(
+                    position=[np.random.uniform(low=self.x_min, high=self.x_max),
+                              np.random.uniform(low=self.y_min, high=self.y_max),
+                              8],
+                    eulers=[0, 0, 0],
+                    health=2
+            )
+            self.enemies.append(enemy)
+            enemy.velocity[1] = np.random.uniform(low=-0.1, high=0.1)
 
         for bullet in self.bullets:
             bullet.update(rate)
             if bullet.position[2] > 48:
                 self.bullets.pop(self.bullets.index(bullet))
+
+        for enemy in self.enemies:
+            enemy.update(rate)
+            if enemy.position[1] >= self.y_max or enemy.position[1] <= self.y_min:
+                enemy.velocity[1] *= -1
 
     def move_player(self, d_pos):
         if self.player.state == 'stable':
@@ -185,6 +208,8 @@ class GraphicsEngine:
         self.grid_mesh = Grid(48)
         self.player_mesh = Mesh('models/rocket.obj')
         self.sphere_mesh = Mesh('models/basic_sphere.obj')
+        self.ufo_base_mesh = Mesh('models/ufo_base.obj')
+        self.ufo_top_mesh = Mesh('models/ufo_top.obj')
 
     def create_shader(self, vertex_file_path, fragment_file_path):
         with open(vertex_file_path, 'r') as f:
@@ -307,22 +332,51 @@ class RenderPass:
             glBindVertexArray(engine.sphere_mesh.vao)
             glDrawArrays(GL_TRIANGLES, 0, engine.sphere_mesh.vertex_count)
 
-            # power ups
-            for power_up in scene.power_ups:
-                glUniform3fv(self.color_location, 1, engine.palette['Green'])
-                model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
-                model_transform = pyrr.matrix44.multiply(
-                    m1=model_transform,
-                    m2=pyrr.matrix44.create_from_scale(scale=np.array([0.4, 0.4, 0.4], dtype=np.float32),
-                                                       dtype=np.float32)
-                )
-                model_transform = pyrr.matrix44.multiply(
-                    m1=model_transform,
-                    m2=pyrr.matrix44.create_from_translation(vec=power_up.position, dtype=np.float32)
-                )
-                glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
-                glBindVertexArray(engine.sphere_mesh.vao)
-                glDrawArrays(GL_TRIANGLES, 0, engine.sphere_mesh.vertex_count)
+        # power ups
+        for power_up in scene.power_ups:
+            glUniform3fv(self.color_location, 1, engine.palette['Green'])
+            model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_scale(scale=np.array([0.4, 0.4, 0.4], dtype=np.float32),
+                                                   dtype=np.float32)
+            )
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_translation(vec=power_up.position, dtype=np.float32)
+            )
+            glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+            glBindVertexArray(engine.sphere_mesh.vao)
+            glDrawArrays(GL_TRIANGLES, 0, engine.sphere_mesh.vertex_count)
+
+        # enemies
+        for enemy in scene.enemies:
+            model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_scale(scale=np.array([0.15, 0.15, 0.25], dtype=np.float32),
+                                                   dtype=np.float32)
+            )
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_x_rotation(theta=np.radians(180), dtype=np.float32)
+            )
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_x_rotation(theta=np.radians(enemy.eulers[0]), dtype=np.float32)
+            )
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_translation(vec=enemy.position, dtype=np.float32)
+            )
+            glUniform3fv(self.color_location, 1, engine.palette['Purple'])
+            glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+            glBindVertexArray(engine.ufo_base_mesh.vao)
+            glDrawArrays(GL_TRIANGLES, 0, engine.ufo_base_mesh.vertex_count)
+            glUniform3fv(self.color_location, 1, engine.palette['Pink'])
+            glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+            glBindVertexArray(engine.ufo_top_mesh.vao)
+            glDrawArrays(GL_TRIANGLES, 0, engine.ufo_top_mesh.vertex_count)
 
     def destroy(self):
         glDeleteProgram(self.shader)
@@ -430,5 +484,6 @@ class Grid:
     def destroy(self):
         glDeleteVertexArrays(1, (self.vao,))
         glDeleteBuffers(1, (self.vbo,))
+
 
 myApp = App(800, 600)
