@@ -122,7 +122,8 @@ class GraphicsEngine:
 
         shader = self.create_shader('shaders/vertex.txt', 'shaders/fragment.txt')
         self.render_pass = RenderPass(shader)
-        self.mountainMesh = Mesh('models/mountains.obj')
+        self.mountain_mesh = Mesh('models/mountains.obj')
+        self.grid_mesh = Grid(24)
 
     def create_shader(self, vertex_file_path, fragment_file_path):
         with open(vertex_file_path, 'r') as f:
@@ -192,8 +193,19 @@ class RenderPass:
             m2=pyrr.matrix44.create_from_translation(vec=np.array([20, 0, 0], dtype=np.float32))
         )
         glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
-        glBindVertexArray(engine.mountainMesh.vao)
-        glDrawArrays(GL_LINES, 0, engine.mountainMesh.vertex_count)
+        glBindVertexArray(engine.mountain_mesh.vao)
+        glDrawArrays(GL_LINES, 0, engine.mountain_mesh.vertex_count)
+
+        # grid
+        glUniform3fv(self.color_location, 1, engine.palette['Teal'])
+        model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+        model_transform = pyrr.matrix44.multiply(
+            m1=model_transform,
+            m2=pyrr.matrix44.create_from_translation(vec=np.array([-3.5, -12, 0], dtype=np.float32))
+        )
+        glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+        glBindVertexArray(engine.grid_mesh.vao)
+        glDrawArrays(GL_LINES, 0, engine.grid_mesh.vertex_count)
 
     def destroy(self):
         glDeleteProgram(self.shader)
@@ -267,5 +279,39 @@ class Mesh:
         glDeleteVertexArrays(1, (self.vao,))
         glDeleteBuffers(1, (self.vbo,))
 
+
+class Grid:
+    def __init__(self, size):
+        vertices = []
+        for i in range(size):
+            vertices.append(i)
+            vertices.append(0)
+            vertices.append(0)
+            vertices.append(i)
+            vertices.append(size - 1)
+            vertices.append(0)
+        for j in range(size):
+            vertices.append(0)
+            vertices.append(j)
+            vertices.append(0)
+            vertices.append(size - 1)
+            vertices.append(j)
+            vertices.append(0)
+
+        self.vertex_count = len(vertices)
+        self.vertices = np.array(vertices, dtype=np.float32)
+
+        self.vao = glGenVertexArrays(1)
+        glBindVertexArray(self.vao)
+        self.vbo = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+        glBufferData(GL_ARRAY_BUFFER, self.vertices.nbytes, self.vertices, GL_STATIC_DRAW)
+        # position
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 12, ctypes.c_void_p(0))
+
+    def destroy(self):
+        glDeleteVertexArrays(1, (self.vao,))
+        glDeleteBuffers(1, (self.vbo,))
 
 myApp = App(800, 600)
