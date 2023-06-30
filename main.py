@@ -8,6 +8,10 @@ import pyrr
 class SimpleComponent:
     def __init__(self, position, velocity):
         self.position = np.array(position, dtype=np.float32)
+        self.velocity = velocity
+
+    def update(self, rate):
+        self.position[0] += rate * self.velocity[0]
 
 
 class SentientComponent:
@@ -19,12 +23,6 @@ class SentientComponent:
         self.can_shoot = True
         self.reload_time = 20
         self.falling_time = 0
-
-    def shoot(self):
-        if self.can_shoot and self.state == 'stable':
-            print('shoot')
-            self.can_shoot = False
-            self.reload_time = 5
 
     def update(self, rate):
         if self.state == 'stable':
@@ -73,9 +71,25 @@ class Scene:
     def update(self, rate):
         self.player.update(rate)
 
+        for bullet in self.bullets:
+            bullet.update(rate)
+            if bullet.position[2] > 48:
+                self.bullets.pop(self.bullets.index(bullet))
+
     def move_player(self, d_pos):
         if self.player.state == 'stable':
             self.player.velocity += d_pos
+
+    def player_shoot(self):
+        if self.player.can_shoot and self.player.state == 'stable':
+            self.bullets.append(
+                SimpleComponent(
+                    position=[6, self.player.position[1], 1],
+                    velocity=[2, 0, 0]
+                )
+            )
+            self.player.can_shoot = False
+            self.player.reload_time = 20
 
 
 class App:
@@ -123,7 +137,7 @@ class App:
             self.scene.move_player(rate * np.array([0, -1, 0], dtype=np.float32))
 
         if keys[pg.K_SPACE]:
-            self.scene.player.shoot()
+            self.scene.player_shoot()
 
     def calculate_frame_rate(self):
         self.current_time = pg.time.get_ticks()
@@ -147,7 +161,9 @@ class GraphicsEngine:
             'Navy': np.array([0, 13/255, 107/255], dtype=np.float32),
             'Purple': np.array([156/255, 25/255, 244/255], dtype=np.float32),
             'Pink': np.array([225/225, 93/255, 162/255], dtype=np.float32),
-            'Teal': np.array([153/225, 221/255, 204/255], dtype=np.float32)
+            'Teal': np.array([153/225, 221/255, 204/255], dtype=np.float32),
+            'Red': np.array([255/225, 93/255, 93/255], dtype=np.float32),
+            'Green': np.array([93/225, 255/255, 93/255], dtype=np.float32)
         }
 
         # init pygame
@@ -168,6 +184,7 @@ class GraphicsEngine:
         self.mountain_mesh = Mesh('models/mountains.obj')
         self.grid_mesh = Grid(48)
         self.player_mesh = Mesh('models/rocket.obj')
+        self.sphere_mesh = Mesh('models/basic_sphere.obj')
 
     def create_shader(self, vertex_file_path, fragment_file_path):
         with open(vertex_file_path, 'r') as f:
@@ -273,6 +290,39 @@ class RenderPass:
         glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
         glBindVertexArray(engine.player_mesh.vao)
         glDrawArrays(GL_TRIANGLES, 0, engine.player_mesh.vertex_count)
+
+        # bullet
+        for bullet in scene.bullets:
+            glUniform3fv(self.color_location, 1, engine.palette['Red'])
+            model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_scale(scale=np.array([0.4, 0.4, 0.4], dtype=np.float32), dtype=np.float32)
+            )
+            model_transform = pyrr.matrix44.multiply(
+                m1=model_transform,
+                m2=pyrr.matrix44.create_from_translation(vec=bullet.position, dtype=np.float32)
+            )
+            glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+            glBindVertexArray(engine.sphere_mesh.vao)
+            glDrawArrays(GL_TRIANGLES, 0, engine.sphere_mesh.vertex_count)
+
+            # power ups
+            for power_up in scene.power_ups:
+                glUniform3fv(self.color_location, 1, engine.palette['Green'])
+                model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+                model_transform = pyrr.matrix44.multiply(
+                    m1=model_transform,
+                    m2=pyrr.matrix44.create_from_scale(scale=np.array([0.4, 0.4, 0.4], dtype=np.float32),
+                                                       dtype=np.float32)
+                )
+                model_transform = pyrr.matrix44.multiply(
+                    m1=model_transform,
+                    m2=pyrr.matrix44.create_from_translation(vec=power_up.position, dtype=np.float32)
+                )
+                glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+                glBindVertexArray(engine.sphere_mesh.vao)
+                glDrawArrays(GL_TRIANGLES, 0, engine.sphere_mesh.vertex_count)
 
     def destroy(self):
         glDeleteProgram(self.shader)
