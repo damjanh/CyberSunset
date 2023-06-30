@@ -99,6 +99,14 @@ class App:
 
 class GraphicsEngine:
     def __init__(self):
+        # colors
+        self.palette = {
+            'Navy': np.array([0, 13/255, 107/255], dtype=np.float32),
+            'Purple': np.array([156/255, 25/255, 244/255], dtype=np.float32),
+            'Pink': np.array([225/225, 93/255, 162/255], dtype=np.float32),
+            'Teal': np.array([153/225, 221/255, 204/255], dtype=np.float32)
+        }
+
         # init pygame
         pg.init()
         pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 3)
@@ -107,7 +115,7 @@ class GraphicsEngine:
         pg.display.set_mode((640, 480), pg.OPENGL | pg.DOUBLEBUF)
 
         # init OpenGL
-        glClearColor(0.0, 0.0, 0.0, 1)
+        glClearColor(self.palette['Navy'][0], self.palette['Navy'][1], self.palette['Navy'][2], 1)
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
