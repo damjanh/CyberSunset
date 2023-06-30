@@ -15,34 +15,43 @@ class SentientComponent:
         self.position = np.array(position, dtype=np.float32)
         self.eulers = np.array(eulers, dtype=np.float32)
         self.velocity = np.array([0, 0, 0], dtype=np.float32)
-        self.state = 'stable'
+        self.state = 'fallingOn'
         self.can_shoot = True
-        self.reload_time = 0
+        self.reload_time = 20
+        self.falling_time = 0
 
     def shoot(self):
-        if self.can_shoot:
+        if self.can_shoot and self.state == 'stable':
             print('shoot')
             self.can_shoot = False
             self.reload_time = 5
 
     def update(self, rate):
-        if abs(self.velocity[1]) < 0.01:
-            self.eulers[0] *= 0.9
-            if abs(self.eulers[0] < 0.5):
-                self.eulers[0] = 0
-        else:
-            self.position += self.velocity / 4
-            self.eulers[0] += 8 * self.velocity[1]
-            self.velocity = np.array([0, 0, 0], dtype=np.float32)
+        if self.state == 'stable':
+            if abs(self.velocity[1]) < 0.01:
+                self.eulers[0] *= 0.9
+                if abs(self.eulers[0] < 0.5):
+                    self.eulers[0] = 0
+            else:
+                self.position += self.velocity / 4
+                self.eulers[0] += 8 * self.velocity[1]
+                self.velocity = np.array([0, 0, 0], dtype=np.float32)
 
-            self.position[1] = min(6, max(-6, self.position[1]))
-            self.eulers[0] = min(45, max(-45, self.eulers[0]))
+                self.position[1] = min(6, max(-6, self.position[1]))
+                self.eulers[0] = min(45, max(-45, self.eulers[0]))
 
-        if not self.can_shoot:
-            self.reload_time -= rate
-            if self.reload_time < 0:
-                self.reload_time = 0
-                self.can_shoot = True
+            if not self.can_shoot:
+                self.reload_time -= rate
+                if self.reload_time < 0:
+                    self.reload_time = 0
+                    self.can_shoot = True
+
+        elif self.state == 'fallingOn':
+            self.position[2] = 0.99 + (0.9 ** self.falling_time) * 18
+            self.falling_time += rate
+            if self.position[2] < 1:
+                self.position[2] = 1
+                self.state = 'stable'
 
 
 class Scene:
@@ -65,7 +74,8 @@ class Scene:
         self.player.update(rate)
 
     def move_player(self, d_pos):
-        self.player.velocity += d_pos
+        if self.player.state == 'stable':
+            self.player.velocity += d_pos
 
 
 class App:
