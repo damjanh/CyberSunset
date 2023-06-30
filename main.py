@@ -14,7 +14,7 @@ class SentientComponent:
     def __init__(self, position, eulers, health):
         self.position = np.array(position, dtype=np.float32)
         self.eulers = np.array(eulers, dtype=np.float32)
-        self.velocity = np.array([0, 0, 0], dtype=np.float32)
+        self.velocity = np.array([1, 0, 2], dtype=np.float32)
         self.state = 'stable'
         self.can_shoot = True
         self.reloading = False
@@ -28,7 +28,7 @@ class Scene:
         self.enemy_shoot_rate = 0
 
         self.player = SentientComponent(
-            position=[0, 0, 0],
+            position=[1, 0, 1],
             eulers=[0, 90, 0],
             health=36
         )
@@ -124,6 +124,7 @@ class GraphicsEngine:
         self.render_pass = RenderPass(shader)
         self.mountain_mesh = Mesh('models/mountains.obj')
         self.grid_mesh = Grid(48)
+        self.player_mesh = Mesh('models/rocket.obj')
 
     def create_shader(self, vertex_file_path, fragment_file_path):
         with open(vertex_file_path, 'r') as f:
@@ -174,7 +175,7 @@ class RenderPass:
         glUseProgram(self.shader)
 
         view_transform = pyrr.matrix44.create_look_at(
-            eye=np.array([0, 0, 4], dtype=np.float32),
+            eye=np.array([-8, 0, 4], dtype=np.float32),
             target=np.array([1, 0, 4], dtype=np.float32),
             up=np.array([0, 0, 1], dtype=np.float32),
             dtype=np.float32
@@ -206,6 +207,25 @@ class RenderPass:
         glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
         glBindVertexArray(engine.grid_mesh.vao)
         glDrawArrays(GL_LINES, 0, engine.grid_mesh.vertex_count)
+
+        # player
+        glUniform3fv(self.color_location, 1, engine.palette['Pink'])
+        model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
+        model_transform = pyrr.matrix44.multiply(
+            m1=model_transform,
+            m2=pyrr.matrix44.create_from_scale(scale=np.array([0.4, 0.4, 0.4], dtype=np.float32), dtype=np.float32)
+        )
+        model_transform = pyrr.matrix44.multiply(
+            m1=model_transform,
+            m2=pyrr.matrix44.create_from_z_rotation(theta=np.radians(-90), dtype=np.float32)
+        )
+        model_transform = pyrr.matrix44.multiply(
+            m1=model_transform,
+            m2=pyrr.matrix44.create_from_translation(vec=scene.player.position, dtype=np.float32)
+        )
+        glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
+        glBindVertexArray(engine.player_mesh.vao)
+        glDrawArrays(GL_TRIANGLES, 0, engine.player_mesh.vertex_count)
 
     def destroy(self):
         glDeleteProgram(self.shader)
