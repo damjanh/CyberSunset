@@ -123,7 +123,7 @@ class GraphicsEngine:
         shader = self.create_shader('shaders/vertex.txt', 'shaders/fragment.txt')
         self.render_pass = RenderPass(shader)
         self.mountain_mesh = Mesh('models/mountains.obj')
-        self.grid_mesh = Grid(24)
+        self.grid_mesh = Grid(48)
 
     def create_shader(self, vertex_file_path, fragment_file_path):
         with open(vertex_file_path, 'r') as f:
@@ -190,7 +190,7 @@ class RenderPass:
         )
         model_transform = pyrr.matrix44.multiply(
             m1=model_transform,
-            m2=pyrr.matrix44.create_from_translation(vec=np.array([20, 0, 0], dtype=np.float32))
+            m2=pyrr.matrix44.create_from_translation(vec=np.array([32, 0, 0], dtype=np.float32))
         )
         glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
         glBindVertexArray(engine.mountain_mesh.vao)
@@ -201,7 +201,7 @@ class RenderPass:
         model_transform = pyrr.matrix44.create_identity(dtype=np.float32)
         model_transform = pyrr.matrix44.multiply(
             m1=model_transform,
-            m2=pyrr.matrix44.create_from_translation(vec=np.array([-3.5, -12, 0], dtype=np.float32))
+            m2=pyrr.matrix44.create_from_translation(vec=np.array([-16, -24, 0], dtype=np.float32))
         )
         glUniformMatrix4fv(self.model_matrix_location, 1, GL_FALSE, model_transform)
         glBindVertexArray(engine.grid_mesh.vao)
