@@ -1,0 +1,247 @@
+import pygame as pg
+from OpenGL.GL import *
+from OpenGL.GL.shaders import compileProgram, compileShader
+import numpy as np
+import pyrr
+
+
+class SimpleComponent:
+    def __init__(self, position, velocity):
+        self.position = np.array(position, dtype=np.float32)
+
+
+class SentientComponent:
+    def __init__(self, position, eulers, health):
+        self.position = np.array(position, dtype=np.float32)
+        self.eulers = np.array(eulers, dtype=np.float32)
+        self.velocity = np.array([0, 0, 0], dtype=np.float32)
+        self.state = 'stable'
+        self.can_shoot = True
+        self.reloading = False
+        self.reload_time = 0
+
+
+class Scene:
+    def __init__(self):
+        self.enemy_spawn_rate = 0
+        self.power_ups_spawn_rate = 0
+        self.enemy_shoot_rate = 0
+
+        self.player = SentientComponent(
+            position=[0, 0, 0],
+            eulers=[0, 90, 0],
+            health=36
+        )
+
+        self.enemies = []
+        self.bullets = []
+        self.power_ups = []
+
+    def update(self, rate):
+        pass
+
+    def move_player(self, d_pos):
+        pass
+
+
+class App:
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+
+        self.renderer = GraphicsEngine()
+        self.scene = Scene()
+        self.last_time = pg.time.get_ticks()
+        self.current_time = 0
+        self.num_frames = 0
+        self.frame_time = 0
+        self.light_count = 0
+
+        self.main_loop()
+
+    def main_loop(self):
+        running = True
+        while running:
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    running = False
+                elif event.type == pg.KEYDOWN:
+                    if event.key == pg.K_ESCAPE:
+                        running = False
+
+            self.handle_keys()
+
+            self.scene.update(self.frame_time * 0.05)
+
+            self.renderer.render(self.scene)
+
+            self.calculate_frame_rate()
+
+        self.quit()
+
+    def handle_keys(self):
+        keys = pg.key.get_pressed()
+
+    def calculate_frame_rate(self):
+        self.current_time = pg.time.get_ticks()
+        delta = self.current_time - self.last_time
+        if delta >= 1000:
+            frame_rate = max(1, int(1000.0 * self.num_frames/delta))
+            pg.display.set_caption(f'Running at {frame_rate} fps.')
+            self.last_time = self.current_time
+            self.num_frames = -1
+            self.frame_time = float(1000.0 / max(1, frame_rate))
+        self.num_frames += 1
+
+    def quit(self):
+        self.renderer.destroy()
+
+
+class GraphicsEngine:
+    def __init__(self):
+        # init pygame
+        pg.init()
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 3)
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 3)
+        pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE)
+        pg.display.set_mode((640, 480), pg.OPENGL | pg.DOUBLEBUF)
+
+        # init OpenGL
+        glClearColor(0.0, 0.0, 0.0, 1)
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        shader = self.create_shader('shaders/vertex.txt', 'shaders/fragment.txt')
+        self.render_pass = RenderPass(shader)
+
+    def create_shader(self, vertex_file_path, fragment_file_path):
+        with open(vertex_file_path, 'r') as f:
+            vertex_src = f.readlines()
+
+        with open(fragment_file_path, 'r') as f:
+            fragment_src = f.readlines()
+
+        shader = compileProgram(
+            compileShader(vertex_src, GL_VERTEX_SHADER),
+            compileShader(fragment_src, GL_FRAGMENT_SHADER)
+        )
+
+        return shader
+
+    def render(self, scene):
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        self.render_pass.render(scene, self)
+
+        pg.display.flip()
+
+    def destroy(self):
+        pg.quit()
+
+
+class RenderPass:
+    def __init__(self, shader):
+        # init OpenGL
+        self.shader = shader
+        glUseProgram(self.shader)
+
+        projection_transform = pyrr.matrix44.create_perspective_projection(
+            fovy=45, aspect=800/600,
+            near=0.1, far=50, dtype=np.float32
+        )
+
+        glUniformMatrix4fv(
+            glGetUniformLocation(self.shader, 'projection'),
+            1, GL_FALSE, projection_transform
+        )
+
+        self.model_matrix_location = glGetUniformLocation(self.shader, 'model')
+        self.view_matrix_location = glGetUniformLocation(self.shader, 'view')
+        self.color_location = glGetUniformLocation(self.shader, 'object_color')
+
+    def render(self, scene, engine):
+        glUseProgram(self.shader)
+
+        view_transform = pyrr.matrix44.create_look_at(
+            eye=np.array([-10, 0, 4], dtype=np.float32),
+            target=np.array([0, 0, 4], dtype=np.float32),
+            up=np.array([0, 0, 1], dtype=np.float32),
+            dtype=np.float32
+        )
+        glUniformMatrix4fv(self.view_matrix_location, 1, GL_FALSE, view_transform)
+
+    def destroy(self):
+        glDeleteProgram(self.shader)
+
+
+class Mesh:
+    def __init__(self, filename):
+        vertices = self.load_mesh(filename)
+        self.vertex_count = len(vertices)
+        self.vertices = np.array(vertices, dtype=np.float32)
+
+        self.vao = glGenVertexArrays(1)
+        glBindVertexArray(self.vao)
+        self.vbo = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+        glBufferData(GL_ARRAY_BUFFER, self.vertices.nbytes, self.vertices, GL_STATIC_DRAW)
+        # position
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 12, ctypes.c_void_p(0))
+
+    def load_mesh(self, filename):
+        v = []
+
+        # final, assembled and packed result
+        vertices = []
+
+        # open the obj file and read the data
+        with open(filename, 'r') as f:
+            line = f.readline()
+            while line:
+                first_space = line.find(" ")
+                flag = line[0:first_space]
+                if flag == "v":
+                    # vertex
+                    line = line.replace("v ", "")
+                    line = line.split(" ")
+                    l = [float(x) for x in line]
+                    v.append(l)
+                elif flag == "f":
+                    # face, three or more vertices in v/vt/vn form
+                    line = line.replace("f ", "")
+                    line = line.replace("\n", "")
+                    # get the individual vertices for each line
+                    line = line.split(" ")
+                    face_vertices = []
+                    for vertex in line:
+                        # break out into [v,vt,vn],
+                        # correct for 0 based indexing.
+                        l = vertex.split("/")
+                        position = int(l[0]) - 1
+                        face_vertices.append(v[position])
+                    # obj file uses triangle fan format for each face individually.
+                    # unpack each face
+                    triangles_in_face = len(line) - 2
+
+                    vertex_order = []
+                    """
+                        eg. 0,1,2,3 unpacks to vertices: [0,1,2,0,2,3]
+                    """
+                    for i in range(triangles_in_face):
+                        vertex_order.append(0)
+                        vertex_order.append(i + 1)
+                        vertex_order.append(i + 2)
+                    for i in vertex_order:
+                        for j in face_vertices[i]:
+                            vertices.append(j)
+                line = f.readline()
+        return vertices
+
+    def destroy(self):
+        glDeleteVertexArrays(1, (self.vao,))
+        glDeleteBuffers(1, (self.vbo,))
+
+
+myApp = App(800, 600)
