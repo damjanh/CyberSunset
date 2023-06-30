@@ -25,7 +25,7 @@ class SentientComponent:
             self.can_shoot = False
             self.reload_time = 5
 
-    def update(self):
+    def update(self, rate):
         if abs(self.velocity[1]) < 0.01:
             self.eulers[0] *= 0.9
             if abs(self.eulers[0] < 0.5):
@@ -37,6 +37,12 @@ class SentientComponent:
 
             self.position[1] = min(6, max(-6, self.position[1]))
             self.eulers[0] = min(45, max(-45, self.eulers[0]))
+
+        if not self.can_shoot:
+            self.reload_time -= rate
+            if self.reload_time < 0:
+                self.reload_time = 0
+                self.can_shoot = True
 
 
 class Scene:
@@ -56,7 +62,7 @@ class Scene:
         self.power_ups = []
 
     def update(self, rate):
-        self.player.update()
+        self.player.update(rate)
 
     def move_player(self, d_pos):
         self.player.velocity += d_pos
