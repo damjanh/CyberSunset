@@ -126,7 +126,7 @@ class Scene:
                 )
             )
             enemy.can_shoot = False
-            enemy.reload_time = 20
+            enemy.reload_time = 40
 
 
 class App:
