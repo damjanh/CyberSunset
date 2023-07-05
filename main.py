@@ -44,12 +44,20 @@ class SentientComponent:
                     self.reload_time = 0
                     self.can_shoot = True
 
+            if self.health < 0:
+                self.state = "fallingOff"
+
         elif self.state == 'fallingOn':
             self.position[2] = 0.99 + (0.9 ** self.falling_time) * 18
             self.falling_time += rate
             if self.position[2] < 1:
+                self.falling_time = 0
                 self.position[2] = 1
                 self.state = 'stable'
+
+        else:
+            self.position[2] = -8 + (0.9 ** self.falling_time) * 9
+            self.falling_time += rate
 
 
 class Scene:
@@ -89,9 +97,33 @@ class Scene:
             self.enemies.append(enemy)
             enemy.velocity[1] = np.random.uniform(low=-0.1, high=0.1)
 
+        hit = False
+
         for bullet in self.bullets:
             bullet.update(rate)
             if bullet.position[0] > 48 or bullet.position[0] < - 10:
+                self.bullets.pop(self.bullets.index(bullet))
+
+            if bullet.position[0] > self.player.position[0] - 1 \
+                and bullet.position[0] < self.player.position[0] + 1 \
+                and bullet.position[1] > self.player.position[1] - 1 \
+                and bullet.position[1] < self.player.position[1] + 1:
+
+                hit = True
+                self.player.health -= 1
+
+            else:
+                for enemy in self.enemies:
+                    if bullet.position[0] > enemy.position[0] - 1 \
+                            and bullet.position[0] < enemy.position[0] + 1 \
+                            and bullet.position[1] > enemy.position[1] - 1 \
+                            and bullet.position[1] < enemy.position[1] + 1:
+
+                        hit = True
+                        enemy.health -= 1
+                        break
+
+            if hit:
                 self.bullets.pop(self.bullets.index(bullet))
 
         for enemy in self.enemies:
@@ -101,6 +133,9 @@ class Scene:
 
             if np.random.uniform() < self.enemy_shoot_rate:
                 self.enemy_shoot(enemy)
+
+            if enemy.position[2] < - 7:
+                self.enemies.pop(self.enemies.index(enemy))
 
     def move_player(self, d_pos):
         if self.player.state == 'stable':
@@ -121,7 +156,7 @@ class Scene:
         if enemy.can_shoot and enemy.state == 'stable':
             self.bullets.append(
                 SimpleComponent(
-                    position=[enemy.position[0], enemy.position[1], 1],
+                    position=[enemy.position[0] - 2, enemy.position[1], 1],
                     velocity=[-2, 0, 0]
                 )
             )
