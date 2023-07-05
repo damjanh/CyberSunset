@@ -91,13 +91,16 @@ class Scene:
 
         for bullet in self.bullets:
             bullet.update(rate)
-            if bullet.position[2] > 48:
+            if bullet.position[0] > 48 or bullet.position[0] < - 10:
                 self.bullets.pop(self.bullets.index(bullet))
 
         for enemy in self.enemies:
             enemy.update(rate)
             if enemy.position[1] >= self.y_max or enemy.position[1] <= self.y_min:
                 enemy.velocity[1] *= -1
+
+            if np.random.uniform() < self.enemy_shoot_rate:
+                self.enemy_shoot(enemy)
 
     def move_player(self, d_pos):
         if self.player.state == 'stable':
@@ -113,6 +116,17 @@ class Scene:
             )
             self.player.can_shoot = False
             self.player.reload_time = 20
+
+    def enemy_shoot(self, enemy):
+        if enemy.can_shoot and enemy.state == 'stable':
+            self.bullets.append(
+                SimpleComponent(
+                    position=[enemy.position[0], enemy.position[1], 1],
+                    velocity=[-2, 0, 0]
+                )
+            )
+            enemy.can_shoot = False
+            enemy.reload_time = 20
 
 
 class App:
